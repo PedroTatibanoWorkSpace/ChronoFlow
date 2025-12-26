@@ -1,0 +1,19 @@
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModuleAsyncOptions } from '@nestjs/typeorm';
+import { Chrono } from '../jobs/entities/job.entity';
+import { ChronoRun } from '../jobs/entities/chrono-run.entity';
+
+export const typeOrmConfig: TypeOrmModuleAsyncOptions = {
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    type: 'postgres',
+    url: config.get<string>('databaseUrl'),
+    autoLoadEntities: true,
+    entities: [Chrono, ChronoRun],
+    synchronize: false,
+    migrationsRun: false,
+    migrations: [__dirname + '/../migrations/*.{ts,js}'],
+    logging: config.get<string>('nodeEnv') !== 'production',
+  }),
+};

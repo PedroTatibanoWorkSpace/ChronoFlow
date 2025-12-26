@@ -1,0 +1,45 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: .
+    env_file:
+      - .env
+    ports:
+      - '${PORT:-3000}:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: yarn start:dev
+    volumes:
+      - ./:/usr/src/app
+      - /usr/src/app/node_modules
+
+  db:
+    image: postgres:16-alpine
+    container_name: chrono_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chrono}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chrono}
+      POSTGRES_DB: ${POSTGRES_DB:-chrono}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-chrono}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: chrono_redis
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+
+volumes:
+  pgdata:
