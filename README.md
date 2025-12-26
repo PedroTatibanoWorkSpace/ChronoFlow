@@ -56,9 +56,15 @@ yarn start:dev
 - `src/jobs/processors/chrono.processor.ts` worker BullMQ que executa HTTP e registra o run
 - Infra organizada em módulos:
   - `src/infrastructure/config` para carregar variáveis (global `ConfigModule`)
-  - `src/infrastructure/database` módulo de TypeORM + migrations
+  - `src/infrastructure/database` módulo de TypeORM + migrations (`src/infrastructure/database/migrations`)
   - `src/infrastructure/queue` módulo do BullMQ
 - `docker-compose.yml` sobe Postgres + Redis + API
+
+## Próximos passos (sugeridos)
+- Novo executor `WPP` (WaHA): adicionar targetType, validação de config (telefone/mensagem), timeouts, e salvar `result`.
+- Hardening do scheduler: deduplicar enfileiramentos (jobId) e opcionalmente usar delays para eliminar polling constante.
+- Observabilidade: logs estruturados e métricas básicas por targetType/sucesso/erro.
+- Índices: `chronos(is_active, next_run_at)` e `chrono_runs(chrono_id, scheduled_for DESC)` para consultas baratas.
 
 ## Próximos passos sugeridos
 - Adicionar migrations TypeORM (tabelas `chronos` e `chrono_runs`)
