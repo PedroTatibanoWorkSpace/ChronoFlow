@@ -1,7 +1,6 @@
+import * as path from 'path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModuleAsyncOptions } from '@nestjs/typeorm';
-import { Chrono } from '../jobs/entities/job.entity';
-import { ChronoRun } from '../jobs/entities/chrono-run.entity';
 
 export const typeOrmConfig: TypeOrmModuleAsyncOptions = {
   imports: [ConfigModule],
@@ -10,10 +9,10 @@ export const typeOrmConfig: TypeOrmModuleAsyncOptions = {
     type: 'postgres',
     url: config.get<string>('databaseUrl'),
     autoLoadEntities: true,
-    entities: [Chrono, ChronoRun],
+    entities: [path.join(__dirname, '../../**/*.entity.{ts,js}')],
     synchronize: false,
     migrationsRun: false,
-    migrations: [__dirname + '/../migrations/*.{ts,js}'],
+    migrations: [path.join(__dirname, './migrations/*.{ts,js}')],
     logging: config.get<string>('nodeEnv') !== 'production',
   }),
 };

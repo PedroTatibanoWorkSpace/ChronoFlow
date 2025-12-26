@@ -54,6 +54,10 @@ yarn start:dev
 - `src/jobs/entities` modelos `Chrono` e `ChronoRun`
 - `src/jobs/scheduler.service.ts` loop que enfileira jobs vencidos
 - `src/jobs/processors/chrono.processor.ts` worker BullMQ que executa HTTP e registra o run
+- Infra organizada em módulos:
+  - `src/infrastructure/config` para carregar variáveis (global `ConfigModule`)
+  - `src/infrastructure/database` módulo de TypeORM + migrations
+  - `src/infrastructure/queue` módulo do BullMQ
 - `docker-compose.yml` sobe Postgres + Redis + API
 
 ## Próximos passos sugeridos

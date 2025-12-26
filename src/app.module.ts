@@ -1,22 +1,16 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { BullModule } from '@nestjs/bullmq';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { bullConfig } from './config/bull.config';
-import { configuration } from './config/configuration';
-import { typeOrmConfig } from './config/typeorm.config';
+import { EnvironmentModule } from './infrastructure/config/environment.module';
+import { DatabaseModule } from './infrastructure/database/database.module';
+import { QueueModule } from './infrastructure/queue/queue.module';
 import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      load: [configuration],
-    }),
-    TypeOrmModule.forRootAsync(typeOrmConfig),
-    BullModule.forRootAsync(bullConfig),
+    EnvironmentModule,
+    DatabaseModule,
+    QueueModule,
     JobsModule,
   ],
   controllers: [AppController],
