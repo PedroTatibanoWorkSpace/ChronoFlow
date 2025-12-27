@@ -6,3 +6,4 @@ import { bullConfig } from './bull.config';
   imports: [BullModule.forRootAsync(bullConfig)],
 })
 export class QueueModule {}
+

@@ -41,5 +41,20 @@ services:
     ports:
       - '${REDIS_PORT:-6379}:6379'
 
+  waha:
+    image: devlikeapro/waha:noweb-arm
+    container_name: chrono_waha
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - '3001:3000' # expose WAHA API/Dashboard on host 3001
+    volumes:
+      - ./waha-sessions:/app/.sessions
+      - ./waha-media:/app/.media
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
 volumes:
   pgdata:

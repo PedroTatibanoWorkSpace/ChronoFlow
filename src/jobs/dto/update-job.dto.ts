@@ -9,10 +9,12 @@ import {
   ValidateIf,
 } from 'class-validator';
 
-const ALLOWED_METHODS = ['POST', 'GET', 'PUT', 'PATCH', 'DELETE'];
-const ALLOWED_TARGETS = ['HTTP'];
-const isHttpTarget = (o: UpdateJobDto): boolean =>
-  (o.targetType ?? 'HTTP') === 'HTTP';
+import {
+  ALLOWED_METHODS,
+  ALLOWED_TARGETS,
+  isHttpTarget,
+  isMessageTarget,
+} from '../../core/jobs/job-targets';
 
 export class UpdateJobDto {
   @IsOptional()
@@ -59,4 +61,16 @@ export class UpdateJobDto {
   @IsOptional()
   @IsObject()
   config?: Record<string, unknown>;
+
+  @ValidateIf(isMessageTarget)
+  @IsString()
+  channelId?: string;
+
+  @ValidateIf(isMessageTarget)
+  @IsString()
+  messageTemplate?: string;
+
+  @ValidateIf(isMessageTarget)
+  @IsString({ each: true })
+  recipients?: string[];
 }

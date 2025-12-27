@@ -59,6 +59,7 @@ yarn start:dev
   - `src/infrastructure/database` módulo de TypeORM + migrations (`src/infrastructure/database/migrations`)
   - `src/infrastructure/queue` módulo do BullMQ
 - `docker-compose.yml` sobe Postgres + Redis + API
+- Serviço WAHA (WhatsApp HTTP API) adicionado no `docker-compose.yml` em `waha` (porta 3001 no host). Variáveis em `.env` (`WAHA_API_KEY`, `WAHA_BASE_URL=http://waha:3000`, dashboard swagger habilitáveis).
 
 ## Próximos passos (sugeridos)
 - Novo executor `WPP` (WaHA): adicionar targetType, validação de config (telefone/mensagem), timeouts, e salvar `result`.

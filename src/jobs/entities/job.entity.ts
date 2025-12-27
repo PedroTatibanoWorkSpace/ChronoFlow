@@ -2,13 +2,16 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { ChronoRun } from './chrono-run.entity';
+import { Channel } from '../../messaging/entities/channel.entity';
 
-export type TargetType = 'HTTP';
+export type TargetType = 'HTTP' | 'MESSAGE';
 export type LastRunStatus = 'SUCCESS' | 'FAILED' | 'PENDING' | null;
 
 @Entity('chronos')
@@ -48,6 +51,19 @@ export class Chrono {
 
   @Column({ type: 'jsonb', nullable: true })
   config?: Record<string, unknown> | null;
+
+  @Column({ name: 'channel_id', type: 'uuid', nullable: true })
+  channelId?: string | null;
+
+  @ManyToOne(() => Channel, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'channel_id', referencedColumnName: 'id' })
+  channel?: Channel | null;
+
+  @Column({ name: 'message_template', type: 'text', nullable: true })
+  messageTemplate?: string | null;
+
+  @Column({ name: 'recipients', type: 'jsonb', nullable: true })
+  recipients?: string[] | null;
 
   @Column({ name: 'last_run_at', type: 'timestamptz', nullable: true })
   lastRunAt?: Date | null;

@@ -33,10 +33,9 @@ export class JobsService {
       dto.targetType ?? 'HTTP'
     ).toUpperCase() as Chrono['targetType'];
 
-    if (targetType !== 'HTTP') {
-      throw new BadRequestException(
-        `targetType ${String(targetType)} not supported yet`,
-      );
+    this.ensureTargetSupported(targetType);
+    if (targetType === 'MESSAGE') {
+      this.ensureMessagePayload(dto);
     }
 
     const cron = this.normalizeCron(dto.cron);
@@ -54,6 +53,9 @@ export class JobsService {
       isActive,
       targetType,
       config: dto.config ?? null,
+      channelId: dto.channelId ?? undefined,
+      messageTemplate: dto.messageTemplate ?? undefined,
+      recipients: dto.recipients ?? undefined,
       lastRunStatus: null,
       nextRunAt,
     });
@@ -84,10 +86,27 @@ export class JobsService {
       dto.targetType ?? existing.targetType
     ).toUpperCase() as Chrono['targetType'];
 
-    if (targetType !== 'HTTP') {
-      throw new BadRequestException(
-        `targetType ${String(targetType)} not supported yet`,
-      );
+    this.ensureTargetSupported(targetType);
+    const channelId =
+      dto.channelId !== undefined
+        ? dto.channelId
+        : existing.channelId ?? undefined;
+    const messageTemplate =
+      dto.messageTemplate !== undefined
+        ? dto.messageTemplate
+        : existing.messageTemplate ?? undefined;
+    const recipients =
+      dto.recipients !== undefined
+        ? dto.recipients
+        : existing.recipients ?? undefined;
+
+    if (targetType === 'MESSAGE') {
+      this.ensureMessagePayload({
+        ...dto,
+        channelId,
+        messageTemplate,
+        recipients,
+      });
     }
     let nextRunAt = existing.nextRunAt;
 
@@ -104,6 +123,9 @@ export class JobsService {
       method: dto.method ? dto.method.toUpperCase() : existing.method,
       targetType,
       config: dto.config ?? existing.config ?? null,
+      channelId: channelId ?? undefined,
+      messageTemplate,
+      recipients,
     });
 
     if (!updated) {
@@ -245,5 +267,37 @@ export class JobsService {
       .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
+  }
+
+  private ensureTargetSupported(targetType: Chrono['targetType']) {
+    if (!['HTTP', 'MESSAGE'].includes(targetType)) {
+      throw new BadRequestException(
+        `targetType ${String(targetType)} not supported yet`,
+      );
+    }
+  }
+
+  private ensureMessagePayload(
+    dto:
+      | CreateJobDto
+      | (UpdateJobDto & {
+          channelId?: string | null;
+          messageTemplate?: string | null;
+          recipients?: string[] | null;
+        }),
+  ) {
+    if (!dto.channelId) {
+      throw new BadRequestException('channelId is required for MESSAGE target');
+    }
+    if (!dto.messageTemplate) {
+      throw new BadRequestException(
+        'messageTemplate is required for MESSAGE target',
+      );
+    }
+    if (!dto.recipients || dto.recipients.length === 0) {
+      throw new BadRequestException(
+        'recipients is required for MESSAGE target',
+      );
+    }
   }
 }
