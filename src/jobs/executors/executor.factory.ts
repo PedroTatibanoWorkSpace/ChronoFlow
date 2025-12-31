@@ -2,13 +2,17 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Chrono } from '../entities/job.entity';
 import { HttpExecutor } from './http.executor';
 import { TargetExecutor } from './target-executor';
+import { MessageExecutor } from './message.executor';
 
 @Injectable()
 export class ExecutorFactory {
   private readonly executors: TargetExecutor[];
 
-  constructor(httpExecutor: HttpExecutor) {
-    this.executors = [httpExecutor];
+  constructor(
+    httpExecutor: HttpExecutor,
+    messageExecutor: MessageExecutor,
+  ) {
+    this.executors = [httpExecutor, messageExecutor];
   }
 
   get(targetType: Chrono['targetType']): TargetExecutor {

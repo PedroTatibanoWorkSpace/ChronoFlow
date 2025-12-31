@@ -19,7 +19,7 @@ export class HttpExecutor implements TargetExecutor {
     try {
       const response = await axios.request({
         method: chrono.method,
-        url: chrono.url,
+        url: chrono.url ?? undefined,
         data: chrono.payload ?? undefined,
         headers: chrono.headers ?? undefined,
         timeout:
@@ -68,7 +68,6 @@ export class HttpExecutor implements TargetExecutor {
 
   private safeJson(data: unknown): unknown {
     try {
-      // Ensure data is JSON-serializable for the jsonb column.
       return JSON.parse(JSON.stringify(data));
     } catch {
       return { message: 'Unable to serialize response data' };

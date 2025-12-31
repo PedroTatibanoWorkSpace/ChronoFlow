@@ -34,8 +34,8 @@ export class Chrono {
   @Column({ type: 'varchar', length: 12, default: 'POST' })
   method: string;
 
-  @Column({ type: 'varchar', length: 1024 })
-  url: string;
+  @Column({ type: 'varchar', length: 1024, nullable: true })
+  url?: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
   headers?: Record<string, string> | null;
@@ -73,6 +73,9 @@ export class Chrono {
 
   @Column({ name: 'next_run_at', type: 'timestamptz', nullable: true })
   nextRunAt?: Date | null;
+
+  @Column({ name: 'is_recurring', type: 'boolean', default: true })
+  isRecurring: boolean;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

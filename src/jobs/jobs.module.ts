@@ -11,9 +11,12 @@ import { SchedulerService } from './scheduler.service';
 import { ChronoProcessor } from './processors/chrono.processor';
 import { HttpExecutor } from './executors/http.executor';
 import { ExecutorFactory } from './executors/executor.factory';
+import { MessageExecutor } from './executors/message.executor';
+import { WahaModule } from '../waha/waha.module';
 
 @Module({
   imports: [
+    WahaModule,
     ConfigModule,
     TypeOrmModule.forFeature([Chrono, ChronoRun]),
     BullModule.registerQueueAsync({
@@ -39,6 +42,7 @@ import { ExecutorFactory } from './executors/executor.factory';
     SchedulerService,
     ChronoProcessor,
     HttpExecutor,
+    MessageExecutor,
     ExecutorFactory,
   ],
 })

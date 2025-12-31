@@ -56,6 +56,7 @@ export class ChronoProcessor extends WorkerHost {
       await this.repository.update(chrono.id, {
         lastRunAt: finishedAt,
         lastRunStatus: result.status,
+        // One-time jobs remain with nextRunAt null (scheduler already disabled).
       });
     } catch (error) {
       const finishedAt = new Date();

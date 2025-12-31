@@ -93,6 +93,16 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async bumpNextRun(chrono: Chrono) {
+    if (!chrono.isRecurring) {
+      await this.repository.update(chrono.id, {
+        nextRunAt: null,
+        lastRunAt: chrono.nextRunAt,
+        lastRunStatus: 'PENDING',
+        isActive: false,
+      });
+      return;
+    }
+
     const nextRun = this.jobsService.computeNextRun(
       chrono.cron,
       chrono.timezone,

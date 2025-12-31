@@ -29,6 +29,9 @@ export class Channel {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
+  @Column({ type: 'varchar', length: 32, default: 'UNKNOWN' })
+  status: string;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

@@ -84,8 +84,18 @@ export class WahaService {
   }
 
   async getQrCode(session: string) {
-    const { data } = await this.client.get(`/api/${session}/auth/qr`);
-    return data;
+    const response = await this.client.get<ArrayBuffer>(
+      `/api/${session}/auth/qr`,
+      {
+        responseType: 'arraybuffer',
+        validateStatus: () => true,
+      },
+    );
+    return {
+      data: response.data,
+      status: response.status,
+      headers: response.headers as Record<string, string>,
+    };
   }
 
   async requestCode(session: string, payload: unknown) {
@@ -94,5 +104,33 @@ export class WahaService {
       payload,
     );
     return data;
+  }
+
+  async sendTextMessage(
+    session: string,
+    to: string,
+    text: string,
+    extra?: Record<string, unknown>,
+  ) {
+    const chatId = this.toChatId(to);
+    const payload = {
+      session,
+      chatId,
+      text,
+      ...((extra ?? {}) as Record<string, unknown>),
+    };
+    const { data, status } = await this.client.post(
+      '/api/sendText',
+      payload,
+    );
+    return { data, status };
+  }
+
+  private toChatId(to: string): string {
+    const digits = to.replace(/[^0-9]/g, '');
+    if (!digits) {
+      throw new BadRequestException('Invalid recipient number');
+    }
+    return `${digits}@c.us`;
   }
 }
