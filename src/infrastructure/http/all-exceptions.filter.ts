@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import type { Response } from 'express';
+import { SCHEDULE_EXAMPLES } from '../../jobs/utils/schedule.util';
 
 @Catch()
 export class AllExceptionsFilter
@@ -20,20 +21,46 @@ export class AllExceptionsFilter
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+    const status = exception instanceof HttpException
+      ? exception.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
 
-    const payload = {
+    const base = {
       statusCode: status,
-      message:
-        exception instanceof HttpException
-          ? exception.message
-          : 'Internal server error',
       timestamp: new Date().toISOString(),
     };
 
-    response.status(status).json(payload);
+    if (exception instanceof HttpException) {
+      const res = exception.getResponse();
+      if (typeof res === 'object') {
+        const body = res as Record<string, unknown>;
+        const message = body.message;
+        const needsExamples =
+          typeof message === 'string' &&
+          message.toLowerCase().includes('cron') &&
+          !body.examples;
+        const withExamples = needsExamples
+          ? { ...body, examples: SCHEDULE_EXAMPLES }
+          : body;
+        response.status(status).json({ ...base, ...withExamples });
+        return;
+      }
+      const message = res ?? exception.message;
+      const maybeCronExamples =
+        typeof message === 'string' && message.toLowerCase().includes('cron')
+          ? { examples: SCHEDULE_EXAMPLES }
+          : {};
+      response.status(status).json({
+        ...base,
+        message,
+        ...maybeCronExamples,
+      });
+      return;
+    }
+
+    response.status(status).json({
+      ...base,
+      message: 'Internal server error',
+    });
   }
 }

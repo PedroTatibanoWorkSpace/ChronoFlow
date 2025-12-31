@@ -3,6 +3,7 @@ import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { JobRepository } from '../repositories/job.repository';
 import { ExecutorFactory } from '../executors/executor.factory';
+import { SchedulerService } from '../scheduler.service';
 
 interface ChronoJobData {
   chronoId: string;
@@ -17,12 +18,13 @@ export class ChronoProcessor extends WorkerHost {
   constructor(
     private readonly repository: JobRepository,
     private readonly executorFactory: ExecutorFactory,
+    private readonly scheduler: SchedulerService,
   ) {
     super();
   }
 
   async process(job: Job<ChronoJobData>) {
-    const { chronoId, runId } = job.data;
+    const { chronoId, runId, manual } = job.data;
 
     const chrono = await this.repository.findById(chronoId);
     if (!chrono) {
@@ -58,6 +60,10 @@ export class ChronoProcessor extends WorkerHost {
         lastRunStatus: result.status,
         // One-time jobs remain with nextRunAt null (scheduler already disabled).
       });
+
+      if (!manual) {
+        await this.scheduler.scheduleNext(chrono);
+      }
     } catch (error) {
       const finishedAt = new Date();
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -73,6 +79,10 @@ export class ChronoProcessor extends WorkerHost {
         lastRunAt: finishedAt,
         lastRunStatus: 'FAILED',
       });
+
+      if (!manual) {
+        await this.scheduler.scheduleNext(chrono);
+      }
 
       this.logger.error(
         `Execution failed for chrono ${chrono.id}`,

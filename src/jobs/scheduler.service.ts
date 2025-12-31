@@ -1,74 +1,42 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
-import { JobsService } from './jobs.service';
 import { JobRepository } from './repositories/job.repository';
 import { Chrono } from './entities/job.entity';
+import { computeNextRun as computeNextRunUtil } from './utils/schedule.util';
 
 @Injectable()
-export class SchedulerService implements OnModuleInit, OnModuleDestroy {
+export class SchedulerService implements OnModuleInit {
   private readonly logger = new Logger(SchedulerService.name);
-  private timer: NodeJS.Timeout | null = null;
-  private readonly intervalMs: number;
+  private readonly attempts: number;
+  private readonly backoffMs: number;
 
   constructor(
-    private readonly jobsService: JobsService,
     private readonly repository: JobRepository,
     @InjectQueue('chrono-executions')
     private readonly queue: Queue,
     configService: ConfigService,
   ) {
-    this.intervalMs = 30000;
-    const envInterval = Number(process.env.SCHEDULER_INTERVAL_MS);
-    if (!Number.isNaN(envInterval) && envInterval > 0) {
-      this.intervalMs = envInterval;
-    } else if (configService.get<number>('schedulerIntervalMs')) {
-      this.intervalMs = configService.get<number>(
-        'schedulerIntervalMs',
-      ) as number;
-    }
+    this.attempts = configService.get<number>('bullAttempts') ?? 3;
+    this.backoffMs = configService.get<number>('bullBackoffMs') ?? 5000;
   }
 
   onModuleInit() {
-    this.logger.log(`Starting scheduler loop (every ${this.intervalMs}ms)`);
-    this.timer = setInterval(() => {
-      void this.dispatchDueChronos();
-    }, this.intervalMs);
+    void this.scheduleAll();
   }
 
-  onModuleDestroy() {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+  async scheduleChrono(chrono: Chrono) {
+    if (!chrono.isActive || !chrono.nextRunAt) {
+      await this.unschedule(chrono.id);
+      return;
     }
-  }
 
-  private async dispatchDueChronos() {
-    const now = new Date();
-    const dueChronos = await this.repository.findDue(now);
+    const jobId = this.buildJobId(chrono.id);
+    await this.removeExisting(jobId);
 
-    for (const chrono of dueChronos) {
-      try {
-        await this.enqueueChrono(chrono);
-        await this.bumpNextRun(chrono);
-      } catch (error) {
-        this.logger.error(
-          `Failed to enqueue chrono ${chrono.id}`,
-          error instanceof Error ? error.stack : String(error),
-        );
-      }
-    }
-  }
-
-  private async enqueueChrono(chrono: Chrono) {
-    const scheduledFor = chrono.nextRunAt ?? new Date();
-    const jobId = `${chrono.id}-${scheduledFor.getTime()}`;
+    const scheduledFor = chrono.nextRunAt;
+    const delay = Math.max(0, scheduledFor.getTime() - Date.now());
 
     const run = await this.repository.createRun({
       chronoId: chrono.id,
@@ -86,31 +54,79 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
       },
       {
         jobId,
+        delay,
         removeOnComplete: true,
-        attempts: 1,
+        attempts: this.attempts,
+        backoff: { type: 'exponential', delay: this.backoffMs },
       },
+    );
+
+    this.logger.debug(
+      `Scheduled chrono ${chrono.id} for ${scheduledFor.toISOString()} (delay ${delay}ms)`,
     );
   }
 
-  private async bumpNextRun(chrono: Chrono) {
-    if (!chrono.isRecurring) {
-      await this.repository.update(chrono.id, {
-        nextRunAt: null,
-        lastRunAt: chrono.nextRunAt,
-        lastRunStatus: 'PENDING',
-        isActive: false,
-      });
+  async unschedule(chronoId: string) {
+    const jobId = this.buildJobId(chronoId);
+    await this.removeExisting(jobId);
+  }
+
+  async scheduleNext(chrono: Chrono) {
+    if (!chrono.isActive) {
+      await this.unschedule(chrono.id);
       return;
     }
 
-    const nextRun = this.jobsService.computeNextRun(
-      chrono.cron,
-      chrono.timezone,
-    );
-    await this.repository.update(chrono.id, {
+    if (!chrono.isRecurring) {
+      await this.repository.update(chrono.id, {
+        isActive: false,
+        nextRunAt: null,
+      });
+      await this.unschedule(chrono.id);
+      return;
+    }
+
+    const nextRun = computeNextRunUtil(chrono.cron, chrono.timezone);
+    if (!nextRun) {
+      await this.repository.update(chrono.id, {
+        isActive: false,
+        nextRunAt: null,
+      });
+      await this.unschedule(chrono.id);
+      return;
+    }
+
+    const updated = await this.repository.update(chrono.id, {
       nextRunAt: nextRun,
-      lastRunAt: chrono.nextRunAt,
-      lastRunStatus: 'PENDING',
+      isActive: true,
     });
+    if (updated) {
+      await this.scheduleChrono(updated);
+    }
+  }
+
+  private async scheduleAll() {
+    const active = await this.repository.findSchedulable();
+    for (const chrono of active) {
+      await this.scheduleChrono(chrono);
+    }
+  }
+
+  private async removeExisting(jobId: string) {
+    try {
+      const existing = await this.queue.getJob(jobId);
+      if (existing) {
+        await existing.remove();
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Could not remove existing job ${jobId}`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  private buildJobId(chronoId: string) {
+    return `chrono-${chronoId}`;
   }
 }

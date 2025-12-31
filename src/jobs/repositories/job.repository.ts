@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, Repository } from 'typeorm';
+import { LessThanOrEqual, Not, IsNull, Repository } from 'typeorm';
 import { Chrono } from '../entities/job.entity';
 import { ChronoRun } from '../entities/chrono-run.entity';
 
@@ -28,6 +28,13 @@ export class JobRepository {
   async findDue(now: Date): Promise<Chrono[]> {
     return this.repo.find({
       where: { isActive: true, nextRunAt: LessThanOrEqual(now) },
+    });
+  }
+
+  async findSchedulable(): Promise<Chrono[]> {
+    return this.repo.find({
+      where: { isActive: true, nextRunAt: Not(IsNull()) },
+      order: { nextRunAt: 'ASC' },
     });
   }
 

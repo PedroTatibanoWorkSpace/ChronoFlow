@@ -17,7 +17,7 @@ export const computeNextRun = (cron: string, timezone: string): Date | null => {
     }) as CronExpression;
     return interval.next().toDate();
   } catch {
-    throw new BadRequestException(`Invalid cron expression: ${cron}`);
+    throw invalidCron(`Invalid cron expression: ${cron}`);
   }
 };
 
@@ -33,7 +33,7 @@ export const parseSchedule = (
   if (inMinutes) {
     const minutes = Number(inMinutes[1]);
     if (Number.isNaN(minutes) || minutes <= 0) {
-      throw new BadRequestException(`Invalid interval: ${input}`);
+      throw invalidCron(`Invalid interval: ${input}`);
     }
     const nextRunAt = DateTime.now()
       .setZone(timezone)
@@ -48,7 +48,7 @@ export const parseSchedule = (
   if (inHours) {
     const hours = Number(inHours[1]);
     if (Number.isNaN(hours) || hours <= 0) {
-      throw new BadRequestException(`Invalid interval: ${input}`);
+      throw invalidCron(`Invalid interval: ${input}`);
     }
     const nextRunAt = DateTime.now()
       .setZone(timezone)
@@ -71,7 +71,7 @@ export const parseSchedule = (
       minute < 0 ||
       minute > 59
     ) {
-      throw new BadRequestException(`Invalid daily time: ${input}`);
+      throw invalidCron(`Invalid daily time: ${input}`);
     }
     const cron = `${minute} ${hour} * * *`;
     const nextRunAt = computeNextRun(cron, timezone);
@@ -93,7 +93,7 @@ export const normalizeCron = (input: string): string => {
   if (everyMinutes) {
     const minutes = Number(everyMinutes[1]);
     if (Number.isNaN(minutes) || minutes <= 0) {
-      throw new BadRequestException(`Invalid interval: ${input}`);
+      throw invalidCron(`Invalid interval: ${input}`);
     }
     return `*/${minutes} * * * *`;
   }
@@ -104,7 +104,7 @@ export const normalizeCron = (input: string): string => {
   if (everyHours) {
     const hours = Number(everyHours[1]);
     if (Number.isNaN(hours) || hours <= 0) {
-      throw new BadRequestException(`Invalid interval: ${input}`);
+      throw invalidCron(`Invalid interval: ${input}`);
     }
     if (hours <= 23) {
       return `0 */${hours} * * *`;
@@ -113,13 +113,30 @@ export const normalizeCron = (input: string): string => {
       const days = hours / 24;
       return `0 0 */${days} * *`;
     }
-    throw new BadRequestException(
+    throw invalidCron(
       `Invalid hourly interval (use <=23h or multiples of 24h): ${input}`,
     );
   }
 
   return simplified;
 };
+
+export const SCHEDULE_EXAMPLES = [
+  'todo dia as 08:00',
+  'daily at 08:00',
+  'in 10 min',
+  'in 1 h',
+  '10 min',
+  '6h',
+  '0 8 * * *',
+];
+
+export const invalidCron = (message: string): BadRequestException =>
+  new BadRequestException({
+    statusCode: 400,
+    message,
+    examples: SCHEDULE_EXAMPLES,
+  });
 
 const normalizeText = (value: string): string =>
   value

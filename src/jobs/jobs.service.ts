@@ -11,6 +11,7 @@ import {
   computeNextRun as computeNextRunUtil,
   parseSchedule,
 } from './utils/schedule.util';
+import { SchedulerService } from './scheduler.service';
 
 type Schedule = { cron: string; nextRunAt: Date | null; isRecurring: boolean };
 
@@ -20,6 +21,7 @@ export class JobsService {
     private readonly repository: JobRepository,
     @InjectQueue('chrono-executions') private readonly queue: Queue,
     private readonly config: ConfigService,
+    private readonly scheduler: SchedulerService,
   ) {}
 
   async create(dto: CreateJobDto): Promise<Chrono> {
@@ -32,7 +34,7 @@ export class JobsService {
 
     const schedule = this.parseSchedule(dto.cron, timezone, isActive);
 
-    return this.repository.create({
+    const chrono = await this.repository.create({
       name: dto.name,
       description: dto.description,
       cron: schedule.cron,
@@ -51,6 +53,9 @@ export class JobsService {
       nextRunAt: schedule.nextRunAt,
       isRecurring: schedule.isRecurring,
     });
+
+    await this.scheduler.scheduleChrono(chrono);
+    return chrono;
   }
 
   findAll(): Promise<Chrono[]> {
@@ -106,11 +111,13 @@ export class JobsService {
     });
 
     if (!updated) throw new NotFoundException('Chrono not found');
+    await this.scheduler.scheduleChrono(updated);
     return updated;
   }
 
   async remove(id: string): Promise<void> {
     await this.findOne(id);
+    await this.scheduler.unschedule(id);
     await this.repository.remove(id);
   }
 
