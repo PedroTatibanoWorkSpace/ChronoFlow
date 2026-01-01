@@ -10,8 +10,9 @@ import {
 } from 'typeorm';
 import { ChronoRun } from './chrono-run.entity';
 import { Channel } from '../../messaging/entities/channel.entity';
+import { UserFunction } from './function.entity';
 
-export type TargetType = 'HTTP' | 'MESSAGE';
+export type TargetType = 'HTTP' | 'MESSAGE' | 'FUNCTION';
 export type LastRunStatus = 'SUCCESS' | 'FAILED' | 'PENDING' | null;
 
 @Entity('chronos')
@@ -64,6 +65,16 @@ export class Chrono {
 
   @Column({ name: 'recipients', type: 'jsonb', nullable: true })
   recipients?: string[] | null;
+
+  @Column({ name: 'function_id', type: 'uuid', nullable: true })
+  functionId?: string | null;
+
+  @ManyToOne(() => UserFunction, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'function_id', referencedColumnName: 'id' })
+  functionRef?: UserFunction | null;
+
+  @Column({ name: 'extras', type: 'jsonb', nullable: true })
+  extras?: Record<string, unknown> | null;
 
   @Column({ name: 'last_run_at', type: 'timestamptz', nullable: true })
   lastRunAt?: Date | null;

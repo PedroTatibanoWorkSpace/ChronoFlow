@@ -12,6 +12,18 @@ export const envConfiguration = () => ({
     10,
   ),
   httpMaxRetries: parseInt(process.env.HTTP_MAX_RETRIES ?? '3', 10),
+  functionHttpAllowlist: (process.env.FUNCTION_HTTP_ALLOWLIST ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  functionMessageRecipientAllowlist: (process.env.FUNCTION_MESSAGE_RECIPIENT_ALLOWLIST ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  functionRateLimitPerSecond: parseInt(
+    process.env.FUNCTION_RATE_LIMIT_PER_SECOND ?? '10',
+    10,
+  ),
   schedulerIntervalMs: parseInt(
     process.env.SCHEDULER_INTERVAL_MS ?? '30000',
     10,

@@ -3,6 +3,7 @@ import { Chrono } from '../entities/job.entity';
 import { HttpExecutor } from './http.executor';
 import { TargetExecutor } from './target-executor';
 import { MessageExecutor } from './message.executor';
+import { FunctionExecutor } from './function.executor';
 
 @Injectable()
 export class ExecutorFactory {
@@ -11,8 +12,9 @@ export class ExecutorFactory {
   constructor(
     httpExecutor: HttpExecutor,
     messageExecutor: MessageExecutor,
+    functionExecutor: FunctionExecutor,
   ) {
-    this.executors = [httpExecutor, messageExecutor];
+    this.executors = [httpExecutor, messageExecutor, functionExecutor];
   }
 
   get(targetType: Chrono['targetType']): TargetExecutor {

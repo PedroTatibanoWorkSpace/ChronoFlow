@@ -12,6 +12,8 @@ import {
   parseSchedule,
 } from './utils/schedule.util';
 import { SchedulerService } from './scheduler.service';
+import { FunctionsRepository } from './repositories/functions.repository';
+import { UserFunction } from './entities/function.entity';
 
 type Schedule = { cron: string; nextRunAt: Date | null; isRecurring: boolean };
 
@@ -22,6 +24,7 @@ export class JobsService {
     @InjectQueue('chrono-executions') private readonly queue: Queue,
     private readonly config: ConfigService,
     private readonly scheduler: SchedulerService,
+    private readonly functionsRepo: FunctionsRepository,
   ) {}
 
   async create(dto: CreateJobDto): Promise<Chrono> {
@@ -31,8 +34,10 @@ export class JobsService {
     const targetType = this.pickTargetType(dto.targetType ?? 'HTTP');
 
     if (targetType === 'MESSAGE') this.assertMessage(dto);
+    if (targetType === 'FUNCTION') await this.assertFunction(dto);
 
     const schedule = this.parseSchedule(dto.cron, timezone, isActive);
+    const fn = await this.resolveFunction(dto, targetType);
 
     const chrono = await this.repository.create({
       name: dto.name,
@@ -49,6 +54,8 @@ export class JobsService {
       channelId: dto.channelId ?? undefined,
       messageTemplate: dto.messageTemplate ?? undefined,
       recipients: dto.recipients ?? undefined,
+      functionId: fn?.id ?? undefined,
+      extras: dto.extras ?? null,
       lastRunStatus: null,
       nextRunAt: schedule.nextRunAt,
       isRecurring: schedule.isRecurring,
@@ -80,9 +87,16 @@ export class JobsService {
     const channelId = dto.channelId ?? existing.channelId ?? undefined;
     const messageTemplate = dto.messageTemplate ?? existing.messageTemplate ?? undefined;
     const recipients = dto.recipients ?? existing.recipients ?? undefined;
+    const extras = dto.extras ?? existing.extras ?? null;
 
     if (targetType === 'MESSAGE') {
       this.assertMessage({ ...existing, ...dto, channelId, messageTemplate, recipients } as any);
+    }
+    let fn: UserFunction | null = null;
+    if (targetType === 'FUNCTION') {
+      await this.assertFunction(dto);
+      const functionId = dto.functionId ?? (existing.functionId ?? undefined);
+      fn = await this.resolveFunction({ ...dto, functionId }, targetType);
     }
 
     const cronInput = dto.cron ?? existing.cron;
@@ -108,6 +122,8 @@ export class JobsService {
       channelId,
       messageTemplate,
       recipients,
+      functionId: fn?.id ?? existing.functionId ?? undefined,
+      extras,
     });
 
     if (!updated) throw new NotFoundException('Chrono not found');
@@ -176,7 +192,7 @@ export class JobsService {
 
   private pickTargetType(value: string): Chrono['targetType'] {
     const t = String(value).toUpperCase() as Chrono['targetType'];
-    if (t !== 'HTTP' && t !== 'MESSAGE') {
+    if (t !== 'HTTP' && t !== 'MESSAGE' && t !== 'FUNCTION') {
       throw new BadRequestException(`targetType ${t} not supported yet`);
     }
     return t;
@@ -186,5 +202,32 @@ export class JobsService {
     if (!dto.channelId) throw new BadRequestException('channelId is required for MESSAGE target');
     if (!dto.messageTemplate) throw new BadRequestException('messageTemplate is required for MESSAGE target');
     if (!dto.recipients?.length) throw new BadRequestException('recipients is required for MESSAGE target');
+  }
+
+  private async assertFunction(dto: { functionId?: string; functionCode?: string }) {
+    if (!dto.functionId && !dto.functionCode) {
+      throw new BadRequestException('Provide functionId or functionCode for FUNCTION target');
+    }
+  }
+
+  private async resolveFunction(
+    dto: { functionId?: string; functionCode?: string; functionRuntime?: string; functionLimits?: Record<string, unknown> },
+    targetType: Chrono['targetType'],
+  ): Promise<UserFunction | null> {
+    if (targetType !== 'FUNCTION') return null;
+    if (dto.functionId) {
+      const fn = await this.functionsRepo.findById(dto.functionId);
+      if (!fn) throw new NotFoundException(`Function ${dto.functionId} not found`);
+      return fn;
+    }
+    if (!dto.functionCode) {
+      throw new BadRequestException('functionCode is required when functionId is not provided');
+    }
+    return this.functionsRepo.createFunction({
+      code: dto.functionCode,
+      runtime: dto.functionRuntime ?? 'vm',
+      limits: dto.functionLimits ?? null,
+      version: 1,
+    });
   }
 }

@@ -13,6 +13,7 @@ import {
   ALLOWED_METHODS,
   ALLOWED_TARGETS,
   isHttpTarget,
+  isFunctionTarget,
   isMessageTarget,
 } from '../../core/jobs/job-targets';
 
@@ -74,4 +75,28 @@ export class CreateJobDto {
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
   recipients?: string[];
+
+  @ValidateIf(isFunctionTarget)
+  @IsOptional()
+  @IsString()
+  functionId?: string;
+
+  @ValidateIf(isFunctionTarget)
+  @IsOptional()
+  @IsString()
+  functionCode?: string;
+
+  @ValidateIf(isFunctionTarget)
+  @IsOptional()
+  @IsString()
+  functionRuntime?: string;
+
+  @ValidateIf(isFunctionTarget)
+  @IsOptional()
+  @IsObject()
+  functionLimits?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  extras?: Record<string, unknown>;
 }

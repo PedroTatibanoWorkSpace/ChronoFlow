@@ -13,6 +13,6 @@ export const typeOrmConfig: TypeOrmModuleAsyncOptions = {
     synchronize: false,
     migrationsRun: false,
     migrations: [path.join(__dirname, './migrations/*.{ts,js}')],
-    logging: config.get<string>('nodeEnv') !== 'production',
+    logging: false,
   }),
 };
