@@ -1,57 +1,62 @@
-version: '3.9'
+version: "3.9"
 
 services:
   api:
-    build:
-      context: .
+    build: .
     env_file:
       - .env
     ports:
-      - '${PORT:-3000}:3000'
+      - "${PORT:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
-    command: yarn start:dev
-    volumes:
-      - ./:/usr/src/app
-      - /usr/src/app/node_modules
+    command: yarn start
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
 
   db:
     image: postgres:16-alpine
-    container_name: chrono_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-chrono}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chrono}
       POSTGRES_DB: ${POSTGRES_DB:-chrono}
-    ports:
-      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-chrono}']
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-chrono}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
 
   redis:
     image: redis:7-alpine
-    container_name: chrono_redis
-    ports:
-      - '${REDIS_PORT:-6379}:6379'
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no
 
   waha:
-    image: devlikeapro/waha:noweb-arm
-    container_name: chrono_waha
-    restart: unless-stopped
+    # x86/multi-arch (NÃO use noweb-arm aqui)
+    image: devlikeapro/waha:noweb
     env_file:
       - .env
     ports:
-      - '3001:3000' # expose WAHA API/Dashboard on host 3001
+      - "3001:3000"
     volumes:
       - ./waha-sessions:/app/.sessions
       - ./waha-media:/app/.media
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 400M
     dns:
       - 1.1.1.1
       - 8.8.8.8
