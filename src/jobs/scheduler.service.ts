@@ -119,10 +119,18 @@ export class SchedulerService implements OnModuleInit {
         await existing.remove();
       }
     } catch (error) {
-      this.logger.warn(
-        `Could not remove existing job ${jobId}`,
-        error instanceof Error ? error.message : String(error),
-      );
+      try {
+        await this.queue.clean(0, 'active' as any);
+        await this.queue.clean(0, 'wait' as any);
+        await this.queue.clean(0, 'delayed' as any);
+        const again = await this.queue.getJob(jobId);
+        if (again) await again.remove();
+      } catch (inner) {
+        this.logger.warn(
+          `Could not remove existing job ${jobId}`,
+          inner instanceof Error ? inner.message : String(inner),
+        );
+      }
     }
   }
 
