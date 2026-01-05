@@ -110,7 +110,7 @@ POST http://<HOST_DA_SUA_API>:3000/waha/webhooks/sessions/status
 
 ### 6) Verifique o status da sessão
 
-Depois de configurar webhook e escanear o QR, o `Channel.status` deve ir para algo como `CONNECTED`.
+Depois de configurar webhook e escanear o QR, o `Channel.status` deve ir para algo como `WORKING`.
 
 Se não atualizar:
 
