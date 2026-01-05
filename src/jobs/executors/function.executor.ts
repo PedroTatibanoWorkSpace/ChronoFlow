@@ -52,6 +52,9 @@ export class FunctionExecutor implements TargetExecutor {
 
     const fn = await this.functionsRepo.findById(chrono.functionId);
     if (!fn) throw new NotFoundException(`Function ${chrono.functionId} not found`);
+    if ((fn.runtime ?? 'vm') !== 'vm') {
+      throw new BadRequestException(`Runtime ${fn.runtime} não suportado`);
+    }
 
     const limits = this.parseLimits(fn.limits);
     const worker = new Worker(path.join(__dirname, 'function.worker.js'), {
@@ -74,6 +77,8 @@ export class FunctionExecutor implements TargetExecutor {
     const perSecondLimit = this.config.get<number>('functionRateLimitPerSecond') ?? 10;
     let windowCount = 0;
     let windowStart = Date.now();
+    let httpCount = 0;
+    let messageCount = 0;
 
     const runPromise = new Promise<WorkerResponse>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -87,6 +92,10 @@ export class FunctionExecutor implements TargetExecutor {
           const id = req.id;
           try {
             if (req.type === 'http') {
+              httpCount += 1;
+              if (httpCount > limits.maxHttp) {
+                throw new BadRequestException('Limite de HTTP requests excedido');
+              }
               const { method, url, body, opts } = req.payload;
               this.assertHttpUrl(url, httpAllowlist);
               this.assertRate(
@@ -116,6 +125,10 @@ export class FunctionExecutor implements TargetExecutor {
                 result: { status: res.status, data: res.data },
               } as WorkerResponse);
             } else if (req.type === 'message') {
+              messageCount += 1;
+              if (messageCount > limits.maxMessages) {
+                throw new BadRequestException('Limite de mensagens excedido');
+              }
               const sessionChannelId = req.payload.channelId ?? chrono.channelId ?? fn.channelId;
               if (!sessionChannelId) {
                 throw new BadRequestException('channelId required to send messages');
@@ -228,8 +241,13 @@ export class FunctionExecutor implements TargetExecutor {
   }
 
   private buildEnvWhitelist(): Record<string, string> {
-    // expor apenas o necessário; hoje nenhum item específico
-    return {};
+    const allow = this.config.get<string[]>('functionEnvAllowlist') ?? [];
+    const env: Record<string, string> = {};
+    for (const key of allow) {
+      const val = process.env[key];
+      if (val !== undefined) env[key] = val;
+    }
+    return env;
   }
 
   private loadHttpAllowlist(): string[] {

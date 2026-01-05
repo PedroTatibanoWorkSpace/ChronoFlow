@@ -218,10 +218,16 @@ export class JobsService {
     if (dto.functionId) {
       const fn = await this.functionsRepo.findById(dto.functionId);
       if (!fn) throw new NotFoundException(`Function ${dto.functionId} not found`);
+      if ((fn.runtime ?? 'vm') !== 'vm') {
+        throw new BadRequestException(`Runtime ${fn.runtime} não suportado`);
+      }
       return fn;
     }
     if (!dto.functionCode) {
       throw new BadRequestException('functionCode is required when functionId is not provided');
+    }
+    if (dto.functionRuntime && dto.functionRuntime !== 'vm') {
+      throw new BadRequestException('Apenas runtime "vm" é suportado');
     }
     return this.functionsRepo.createFunction({
       code: dto.functionCode,

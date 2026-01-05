@@ -2,6 +2,10 @@ import { parentPort, workerData } from 'worker_threads';
 import vm from 'vm';
 import { v4 as uuid } from 'uuid';
 
+const MAX_LOG_ENTRIES = 200;
+const MAX_LOG_LENGTH = 1000;
+const MAX_STATE_BYTES = 10000;
+
 type WorkerRequest =
   | { id: string; type: 'http'; payload: { method: string; url: string; body?: unknown; opts?: Record<string, unknown> } }
   | { id: string; type: 'message'; payload: { to: string; text: string; channelId?: string | null } };
@@ -44,10 +48,17 @@ const requestMessage = async (payload: { to: string; text: string; channelId?: s
 };
 
 const logs: string[] = [];
+
+const pushLog = (args: unknown[]) => {
+  if (logs.length >= MAX_LOG_ENTRIES) return;
+  const entry = args.map((a) => String(a)).join(' ');
+  logs.push(entry.slice(0, MAX_LOG_LENGTH));
+};
+
 const safeConsole = {
-  log: (...args: unknown[]) => logs.push(args.map(String).join(' ')),
-  warn: (...args: unknown[]) => logs.push(args.map(String).join(' ')),
-  error: (...args: unknown[]) => logs.push(args.map(String).join(' ')),
+  log: (...args: unknown[]) => pushLog(args),
+  warn: (...args: unknown[]) => pushLog(args),
+  error: (...args: unknown[]) => pushLog(args),
 };
 
 const stateStore: Record<string, unknown> = { ...(workerData.state ?? {}) };
@@ -69,6 +80,16 @@ const ctx = Object.freeze({
   state: Object.freeze({
     get: <T = unknown>(key: string): T | undefined => stateStore[key] as T,
     set: (key: string, value: unknown) => {
+      const size = (() => {
+        try {
+          return JSON.stringify(value)?.length ?? 0;
+        } catch {
+          return MAX_STATE_BYTES + 1;
+        }
+      })();
+      if (size > MAX_STATE_BYTES) {
+        throw new Error('Estado excede o limite permitido');
+      }
       stateStore[key] = value;
     },
   }),

@@ -37,18 +37,22 @@ export class UpdateJobDto {
 
   @ValidateIf(isHttpTarget)
   @IsUrl()
+  @IsOptional()
   url?: string;
 
   @ValidateIf(isHttpTarget)
   @IsIn(ALLOWED_METHODS)
+  @IsOptional()
   method?: string;
 
   @ValidateIf(isHttpTarget)
   @IsObject()
+  @IsOptional()
   headers?: Record<string, string>;
 
   @ValidateIf(isHttpTarget)
   @IsObject()
+  @IsOptional()
   payload?: Record<string, unknown>;
 
   @IsOptional()
