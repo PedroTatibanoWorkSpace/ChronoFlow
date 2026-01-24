@@ -7,7 +7,7 @@ export interface ExecutionResult {
   httpStatus?: number | null;
   responseSnippet?: string | null;
   errorMessage?: string | null;
-  result?: unknown | null;
+  result?: unknown;
   durationMs: number;
 }
 

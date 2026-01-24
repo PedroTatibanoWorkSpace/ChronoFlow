@@ -1,4 +1,10 @@
-export const ALLOWED_METHODS = ['POST', 'GET', 'PUT', 'PATCH', 'DELETE'] as const;
+export const ALLOWED_METHODS = [
+  'POST',
+  'GET',
+  'PUT',
+  'PATCH',
+  'DELETE',
+] as const;
 export const ALLOWED_TARGETS = ['HTTP', 'MESSAGE', 'FUNCTION'] as const;
 
 type TargetCarrier = { targetType?: string };

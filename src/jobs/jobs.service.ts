@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
@@ -34,7 +38,7 @@ export class JobsService {
     const targetType = this.pickTargetType(dto.targetType ?? 'HTTP');
 
     if (targetType === 'MESSAGE') this.assertMessage(dto);
-    if (targetType === 'FUNCTION') await this.assertFunction(dto);
+    if (targetType === 'FUNCTION') this.assertFunction(dto);
 
     const schedule = this.parseSchedule(dto.cron, timezone, isActive);
     const fn = await this.resolveFunction(dto, targetType);
@@ -85,17 +89,18 @@ export class JobsService {
     );
 
     const channelId = dto.channelId ?? existing.channelId ?? undefined;
-    const messageTemplate = dto.messageTemplate ?? existing.messageTemplate ?? undefined;
+    const messageTemplate =
+      dto.messageTemplate ?? existing.messageTemplate ?? undefined;
     const recipients = dto.recipients ?? existing.recipients ?? undefined;
     const extras = dto.extras ?? existing.extras ?? null;
 
     if (targetType === 'MESSAGE') {
-      this.assertMessage({ ...existing, ...dto, channelId, messageTemplate, recipients } as any);
+      this.assertMessage({ channelId, messageTemplate, recipients });
     }
     let fn: UserFunction | null = null;
     if (targetType === 'FUNCTION') {
-      await this.assertFunction(dto);
-      const functionId = dto.functionId ?? (existing.functionId ?? undefined);
+      this.assertFunction(dto);
+      const functionId = dto.functionId ?? existing.functionId ?? undefined;
       fn = await this.resolveFunction({ ...dto, functionId }, targetType);
     }
 
@@ -161,7 +166,10 @@ export class JobsService {
       {
         removeOnComplete: true,
         attempts: this.config.get<number>('bullAttempts') ?? 3,
-        backoff: { type: 'exponential', delay: this.config.get<number>('bullBackoffMs') ?? 5000 },
+        backoff: {
+          type: 'exponential',
+          delay: this.config.get<number>('bullBackoffMs') ?? 5000,
+        },
       },
     );
 
@@ -191,40 +199,64 @@ export class JobsService {
   }
 
   private pickTargetType(value: string): Chrono['targetType'] {
-    const t = String(value).toUpperCase() as Chrono['targetType'];
+    const t = String(value).toUpperCase();
     if (t !== 'HTTP' && t !== 'MESSAGE' && t !== 'FUNCTION') {
       throw new BadRequestException(`targetType ${t} not supported yet`);
     }
     return t;
   }
 
-  private assertMessage(dto: { channelId?: string | null; messageTemplate?: string | null; recipients?: string[] | null }) {
-    if (!dto.channelId) throw new BadRequestException('channelId is required for MESSAGE target');
-    if (!dto.messageTemplate) throw new BadRequestException('messageTemplate is required for MESSAGE target');
-    if (!dto.recipients?.length) throw new BadRequestException('recipients is required for MESSAGE target');
+  private assertMessage(dto: {
+    channelId?: string | null;
+    messageTemplate?: string | null;
+    recipients?: string[] | null;
+  }) {
+    if (!dto.channelId)
+      throw new BadRequestException('channelId is required for MESSAGE target');
+    if (!dto.messageTemplate)
+      throw new BadRequestException(
+        'messageTemplate is required for MESSAGE target',
+      );
+    if (!dto.recipients?.length)
+      throw new BadRequestException(
+        'recipients is required for MESSAGE target',
+      );
   }
 
-  private async assertFunction(dto: { functionId?: string; functionCode?: string }) {
+  private assertFunction(dto: {
+    functionId?: string;
+    functionCode?: string;
+  }): void {
     if (!dto.functionId && !dto.functionCode) {
-      throw new BadRequestException('Provide functionId or functionCode for FUNCTION target');
+      throw new BadRequestException(
+        'Provide functionId or functionCode for FUNCTION target',
+      );
     }
   }
 
   private async resolveFunction(
-    dto: { functionId?: string; functionCode?: string; functionRuntime?: string; functionLimits?: Record<string, unknown> },
+    dto: {
+      functionId?: string;
+      functionCode?: string;
+      functionRuntime?: string;
+      functionLimits?: Record<string, unknown>;
+    },
     targetType: Chrono['targetType'],
   ): Promise<UserFunction | null> {
     if (targetType !== 'FUNCTION') return null;
     if (dto.functionId) {
       const fn = await this.functionsRepo.findById(dto.functionId);
-      if (!fn) throw new NotFoundException(`Function ${dto.functionId} not found`);
+      if (!fn)
+        throw new NotFoundException(`Function ${dto.functionId} not found`);
       if ((fn.runtime ?? 'vm') !== 'vm') {
         throw new BadRequestException(`Runtime ${fn.runtime} não suportado`);
       }
       return fn;
     }
     if (!dto.functionCode) {
-      throw new BadRequestException('functionCode is required when functionId is not provided');
+      throw new BadRequestException(
+        'functionCode is required when functionId is not provided',
+      );
     }
     if (dto.functionRuntime && dto.functionRuntime !== 'vm') {
       throw new BadRequestException('Apenas runtime "vm" é suportado');

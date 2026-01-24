@@ -22,10 +22,9 @@ export class ChannelRepository {
     return this.repo.findOne({
       where: {
         provider,
-        config: Raw(
-          (alias) => `LOWER(${alias} ->> 'session') = :session`,
-          { session: normalized },
-        ),
+        config: Raw((alias) => `LOWER(${alias} ->> 'session') = :session`, {
+          session: normalized,
+        }),
       },
     });
   }

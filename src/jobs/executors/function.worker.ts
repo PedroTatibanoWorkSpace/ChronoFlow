@@ -1,20 +1,76 @@
-import { parentPort, workerData } from 'worker_threads';
+import { parentPort, workerData as rawWorkerData } from 'worker_threads';
 import vm from 'vm';
 import { v4 as uuid } from 'uuid';
+
+interface WorkerData {
+  code: string;
+  limits: {
+    timeoutMs: number;
+    maxHttp: number;
+    maxMessages: number;
+    maxMemoryMb: number;
+  };
+  state: Record<string, unknown> | null;
+  env: Record<string, string> | null;
+}
+
+const workerData = rawWorkerData as WorkerData;
 
 const MAX_LOG_ENTRIES = 200;
 const MAX_LOG_LENGTH = 1000;
 const MAX_STATE_BYTES = 10000;
 
 type WorkerRequest =
-  | { id: string; type: 'http'; payload: { method: string; url: string; body?: unknown; opts?: Record<string, unknown> } }
-  | { id: string; type: 'message'; payload: { to: string; text: string; channelId?: string | null } };
+  | {
+      id: string;
+      type: 'http';
+      payload: {
+        method: string;
+        url: string;
+        body?: unknown;
+        opts?: Record<string, unknown>;
+      };
+    }
+  | {
+      id: string;
+      type: 'message';
+      payload: { to: string; text: string; channelId?: string | null };
+    };
+
+type WorkerResponseOk = {
+  id: string;
+  type: 'response';
+  ok: true;
+  result: unknown;
+};
+type WorkerResponseError = {
+  id: string;
+  type: 'response';
+  ok: false;
+  error: string;
+};
+type WorkerResultOk = {
+  id: string;
+  type: 'result';
+  ok: true;
+  data: { logs: string[]; state: Record<string, unknown> | null };
+};
+type WorkerError = { id: string; type: 'error'; error: string };
 
 type WorkerResponse =
-  | { id: string; type: 'response'; ok: true; result: unknown }
-  | { id: string; type: 'response'; ok: false; error: string }
-  | { id: string; type: 'result'; ok: true; data: { logs: string[]; state: Record<string, unknown> | null } }
-  | { id: string; type: 'error'; error: string };
+  | WorkerResponseOk
+  | WorkerResponseError
+  | WorkerResultOk
+  | WorkerError;
+
+const isSuccessResponse = (res: WorkerResponse): res is WorkerResponseOk =>
+  res.type === 'response' && res.ok === true;
+
+const getErrorMessage = (res: WorkerResponse): string => {
+  if (res.type === 'error') return res.error;
+  if (res.type === 'response' && !res.ok) return res.error;
+  return 'Request failed';
+};
 
 const send = (msg: WorkerRequest | WorkerResponse) => {
   parentPort?.postMessage(msg);
@@ -23,7 +79,10 @@ const send = (msg: WorkerRequest | WorkerResponse) => {
 const waitResponse = (id: string) =>
   new Promise<WorkerResponse>((resolve) => {
     const listener = (msg: WorkerResponse | WorkerRequest) => {
-      if ((msg as WorkerResponse).type === 'response' && (msg as WorkerResponse).id === id) {
+      if (
+        (msg as WorkerResponse).type === 'response' &&
+        (msg as WorkerResponse).id === id
+      ) {
         parentPort?.off('message', listener);
         resolve(msg as WorkerResponse);
       }
@@ -31,20 +90,29 @@ const waitResponse = (id: string) =>
     parentPort?.on('message', listener);
   });
 
-const requestHttp = async (method: string, url: string, body?: unknown, opts?: Record<string, unknown>) => {
+const requestHttp = async (
+  method: string,
+  url: string,
+  body?: unknown,
+  opts?: Record<string, unknown>,
+) => {
   const id = uuid();
   send({ id, type: 'http', payload: { method, url, body, opts } });
   const res = await waitResponse(id);
-  if (res.type !== 'response' || !res.ok) throw new Error((res as any).error ?? 'Request failed');
-  return (res as any).result;
+  if (!isSuccessResponse(res)) throw new Error(getErrorMessage(res));
+  return res.result;
 };
 
-const requestMessage = async (payload: { to: string; text: string; channelId?: string | null }) => {
+const requestMessage = async (payload: {
+  to: string;
+  text: string;
+  channelId?: string | null;
+}) => {
   const id = uuid();
   send({ id, type: 'message', payload });
   const res = await waitResponse(id);
-  if (res.type !== 'response' || !res.ok) throw new Error((res as any).error ?? 'Request failed');
-  return (res as any).result;
+  if (!isSuccessResponse(res)) throw new Error(getErrorMessage(res));
+  return res.result;
 };
 
 const logs: string[] = [];
@@ -61,21 +129,33 @@ const safeConsole = {
   error: (...args: unknown[]) => pushLog(args),
 };
 
-const stateStore: Record<string, unknown> = { ...(workerData.state ?? {}) };
+const stateStore: Record<string, unknown> = {
+  ...(workerData.state ?? {}),
+} as Record<string, unknown>;
 
 const ctx = Object.freeze({
   http: Object.freeze({
-    get: (url: string, opts?: Record<string, unknown>) => requestHttp('get', url, undefined, opts),
+    get: (url: string, opts?: Record<string, unknown>) =>
+      requestHttp('get', url, undefined, opts),
     post: (url: string, body?: unknown, opts?: Record<string, unknown>) =>
       requestHttp('post', url, body, opts),
-    put: (url: string, body?: unknown, opts?: Record<string, unknown>) => requestHttp('put', url, body, opts),
+    put: (url: string, body?: unknown, opts?: Record<string, unknown>) =>
+      requestHttp('put', url, body, opts),
     patch: (url: string, body?: unknown, opts?: Record<string, unknown>) =>
       requestHttp('patch', url, body, opts),
-    delete: (url: string, opts?: Record<string, unknown>) => requestHttp('delete', url, undefined, opts),
+    delete: (url: string, opts?: Record<string, unknown>) =>
+      requestHttp('delete', url, undefined, opts),
   }),
   message: Object.freeze({
-    send: ({ to, text, channelId }: { to: string; text: string; channelId?: string | null }) =>
-      requestMessage({ to, text, channelId }),
+    send: ({
+      to,
+      text,
+      channelId,
+    }: {
+      to: string;
+      text: string;
+      channelId?: string | null;
+    }) => requestMessage({ to, text, channelId }),
   }),
   state: Object.freeze({
     get: <T = unknown>(key: string): T | undefined => stateStore[key] as T,
@@ -94,8 +174,9 @@ const ctx = Object.freeze({
     },
   }),
   log: (...args: unknown[]) => safeConsole.log(...args),
-  sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms))),
-  env: (key: string) => (workerData.env?.[key] as string | undefined),
+  sleep: (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, Math.max(0, ms))),
+  env: (key: string) => workerData.env?.[key],
 });
 
 const sandbox = vm.createContext({
@@ -127,14 +208,23 @@ const wrapCode = (code: string) => `
 
 const run = async () => {
   try {
-    const script = new vm.Script(wrapCode(workerData.code), { filename: 'function.js' });
-    const fn = script.runInContext(sandbox, { timeout: workerData.limits.timeoutMs });
+    const script = new vm.Script(wrapCode(workerData.code), {
+      filename: 'function.js',
+    });
+    const fn = script.runInContext(sandbox, {
+      timeout: workerData.limits.timeoutMs,
+    }) as (context: unknown) => Promise<void>;
     await fn(ctx);
-    send({ id: 'result', type: 'result', ok: true, data: { logs, state: stateStore } });
+    send({
+      id: 'result',
+      type: 'result',
+      ok: true,
+      data: { logs, state: stateStore },
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Execution error';
     send({ id: 'error', type: 'error', error: msg });
   }
 };
 
-run();
+void run();

@@ -33,10 +33,7 @@ export class WahaSessionsController {
   }
 
   @Put(':session')
-  update(
-    @Param('session') session: string,
-    @Body() payload: UpdateSessionDto,
-  ) {
+  update(@Param('session') session: string, @Body() payload: UpdateSessionDto) {
     return this.waha.updateSession(session, payload);
   }
 
@@ -75,9 +72,7 @@ export class WahaSessionsController {
     const qr = await this.waha.getQrCode(session);
     const contentType =
       (qr.headers['content-type'] as string | undefined) ?? 'image/png';
-    const raw = Buffer.isBuffer(qr.data)
-      ? qr.data
-      : Buffer.from(qr.data as ArrayBuffer);
+    const raw = Buffer.isBuffer(qr.data) ? qr.data : Buffer.from(qr.data);
 
     if (contentType.includes('image')) {
       res.setHeader('Content-Type', contentType);

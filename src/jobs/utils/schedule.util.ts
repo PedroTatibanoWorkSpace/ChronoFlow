@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 import { BadRequestException } from '@nestjs/common';
-import { CronExpression, parseExpression } from 'cron-parser';
+import { parseExpression } from 'cron-parser';
 import { DateTime } from 'luxon';
 
 export interface ScheduleParseResult {
@@ -10,11 +11,11 @@ export interface ScheduleParseResult {
 
 export const computeNextRun = (cron: string, timezone: string): Date | null => {
   try {
-    const now = DateTime.now().setZone(timezone) as unknown as DateTime;
+    const now = DateTime.now().setZone(timezone);
     const interval = parseExpression(cron, {
       currentDate: now.toJSDate(),
       tz: timezone,
-    }) as CronExpression;
+    });
     return interval.next().toDate();
   } catch {
     throw invalidCron(`Invalid cron expression: ${cron}`);
@@ -87,9 +88,7 @@ export const normalizeCron = (input: string): string => {
   const simplified = input.trim();
   const normalized = normalizeText(simplified);
 
-  const everyMinutes = normalized.match(
-    /^(\d+)\s*(min|mins|minute|minutes)$/i,
-  );
+  const everyMinutes = normalized.match(/^(\d+)\s*(min|mins|minute|minutes)$/i);
   if (everyMinutes) {
     const minutes = Number(everyMinutes[1]);
     if (Number.isNaN(minutes) || minutes <= 0) {

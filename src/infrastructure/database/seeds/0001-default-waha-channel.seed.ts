@@ -1,8 +1,7 @@
 import 'dotenv/config';
-import { DataSource } from 'typeorm';
+import { DataSource, Raw } from 'typeorm';
 import dataSource from '../../../data-source';
 import { Channel } from '../../../messaging/entities/channel.entity';
-import { ChannelRepository } from '../../../messaging/repositories/channel.repository';
 
 const DEFAULT_SESSION = 'default';
 
@@ -11,18 +10,23 @@ async function run() {
     ? dataSource
     : await dataSource.initialize();
 
-  const repo = new ChannelRepository(ds.getRepository(Channel) as any);
+  const repo = ds.getRepository(Channel);
 
-  const existing = await repo.findByProviderAndSession(
-    'WAHA',
-    DEFAULT_SESSION,
-  );
+  const existing = await repo.findOne({
+    where: {
+      provider: 'WAHA',
+      config: Raw((alias) => `LOWER(${alias} ->> 'session') = :session`, {
+        session: DEFAULT_SESSION,
+      }),
+    },
+  });
+
   if (existing) {
     await ds.destroy();
     return;
   }
 
-  const created = await repo.create({
+  await repo.save({
     name: 'WAHA Default',
     description: 'Default WAHA session',
     channelType: 'WHATSAPP',
@@ -35,12 +39,12 @@ async function run() {
   await ds.destroy();
 }
 
-void run().catch(async (err) => {
-
+void run().catch(async () => {
   if (!dataSource.isInitialized) {
     try {
       await dataSource.destroy();
     } catch {
+      // Ignore cleanup errors
     }
   }
   process.exit(1);

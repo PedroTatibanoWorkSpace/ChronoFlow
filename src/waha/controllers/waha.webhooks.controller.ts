@@ -1,12 +1,26 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { ChannelRepository } from '../../messaging/repositories/channel.repository';
 
+interface WahaNestedPayload {
+  session?: string;
+  name?: string;
+  status?: string;
+}
+
+interface WahaWebhookPayload {
+  session?: string;
+  status?: string;
+  state?: string;
+  data?: WahaNestedPayload;
+  payload?: WahaNestedPayload;
+}
+
 @Controller('waha/webhooks')
 export class WahaWebhooksController {
   constructor(private readonly channels: ChannelRepository) {}
 
   @Post('sessions/status')
-  async handleSessionStatus(@Body() payload: Record<string, unknown>) {
+  async handleSessionStatus(@Body() payload: WahaWebhookPayload) {
     const sessionName = this.extractSession(payload);
     const status = this.extractStatus(payload);
 
@@ -40,11 +54,11 @@ export class WahaWebhooksController {
     };
   }
 
-  private extractSession(payload: Record<string, unknown>): string | null {
+  private extractSession(payload: WahaWebhookPayload): string | null {
     const s =
-      (payload.session as string) ??
-      (payload.data as any)?.session ??
-      (payload.payload as any)?.name ??
+      payload.session ??
+      payload.data?.session ??
+      payload.payload?.name ??
       'default';
 
     if (typeof s !== 'string') return null;
@@ -53,12 +67,12 @@ export class WahaWebhooksController {
     return out || null;
   }
 
-  private extractStatus(payload: Record<string, unknown>): string | null {
+  private extractStatus(payload: WahaWebhookPayload): string | null {
     const s =
-      (payload.status as string) ??
-      (payload.data as any)?.status ??
-      (payload.payload as any)?.status ??
-      (payload.state as string);
+      payload.status ??
+      payload.data?.status ??
+      payload.payload?.status ??
+      payload.state;
 
     return typeof s === 'string' ? s.trim() : null;
   }

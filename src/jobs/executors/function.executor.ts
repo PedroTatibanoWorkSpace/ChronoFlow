@@ -22,13 +22,31 @@ type FnLimits = {
 };
 
 type WorkerRequest =
-  | { id: string; type: 'http'; payload: { method: string; url: string; body?: unknown; opts?: Record<string, unknown> } }
-  | { id: string; type: 'message'; payload: { to: string; text: string; channelId?: string | null } };
+  | {
+      id: string;
+      type: 'http';
+      payload: {
+        method: string;
+        url: string;
+        body?: unknown;
+        opts?: Record<string, unknown>;
+      };
+    }
+  | {
+      id: string;
+      type: 'message';
+      payload: { to: string; text: string; channelId?: string | null };
+    };
 
 type WorkerResponse =
   | { id: string; type: 'response'; ok: true; result: unknown }
   | { id: string; type: 'response'; ok: false; error: string }
-  | { id: string; type: 'result'; ok: true; data: { logs: string[]; state: Record<string, unknown> | null } }
+  | {
+      id: string;
+      type: 'result';
+      ok: true;
+      data: { logs: string[]; state: Record<string, unknown> | null };
+    }
   | { id: string; type: 'error'; error: string };
 
 @Injectable()
@@ -51,7 +69,8 @@ export class FunctionExecutor implements TargetExecutor {
     }
 
     const fn = await this.functionsRepo.findById(chrono.functionId);
-    if (!fn) throw new NotFoundException(`Function ${chrono.functionId} not found`);
+    if (!fn)
+      throw new NotFoundException(`Function ${chrono.functionId} not found`);
     if ((fn.runtime ?? 'vm') !== 'vm') {
       throw new BadRequestException(`Runtime ${fn.runtime} não suportado`);
     }
@@ -74,7 +93,8 @@ export class FunctionExecutor implements TargetExecutor {
 
     const httpAllowlist = this.loadHttpAllowlist();
     const messageAllowlist = this.loadMessageAllowlist();
-    const perSecondLimit = this.config.get<number>('functionRateLimitPerSecond') ?? 10;
+    const perSecondLimit =
+      this.config.get<number>('functionRateLimitPerSecond') ?? 10;
     let windowCount = 0;
     let windowStart = Date.now();
     let httpCount = 0;
@@ -82,19 +102,25 @@ export class FunctionExecutor implements TargetExecutor {
 
     const runPromise = new Promise<WorkerResponse>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        worker.terminate();
+        void worker.terminate();
         reject(new InternalServerErrorException('Function timeout'));
       }, limits.timeoutMs);
 
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
       worker.on('message', async (msg: WorkerRequest | WorkerResponse) => {
-        if ((msg as WorkerRequest).type === 'http' || (msg as WorkerRequest).type === 'message') {
+        if (
+          (msg as WorkerRequest).type === 'http' ||
+          (msg as WorkerRequest).type === 'message'
+        ) {
           const req = msg as WorkerRequest;
           const id = req.id;
           try {
             if (req.type === 'http') {
               httpCount += 1;
               if (httpCount > limits.maxHttp) {
-                throw new BadRequestException('Limite de HTTP requests excedido');
+                throw new BadRequestException(
+                  'Limite de HTTP requests excedido',
+                );
               }
               const { method, url, body, opts } = req.payload;
               this.assertHttpUrl(url, httpAllowlist);
@@ -108,11 +134,13 @@ export class FunctionExecutor implements TargetExecutor {
                 () => {
                   windowCount += 1;
                   if (windowCount > perSecondLimit) {
-                    throw new BadRequestException('Rate limit exceeded (per second)');
+                    throw new BadRequestException(
+                      'Rate limit exceeded (per second)',
+                    );
                   }
                 },
               );
-              const res = await axiosInstance.request({
+              const res = await axiosInstance.request<unknown>({
                 method,
                 url,
                 data: body,
@@ -123,19 +151,24 @@ export class FunctionExecutor implements TargetExecutor {
                 type: 'response',
                 ok: true,
                 result: { status: res.status, data: res.data },
-              } as WorkerResponse);
+              } satisfies WorkerResponse);
             } else if (req.type === 'message') {
               messageCount += 1;
               if (messageCount > limits.maxMessages) {
                 throw new BadRequestException('Limite de mensagens excedido');
               }
-              const sessionChannelId = req.payload.channelId ?? chrono.channelId ?? fn.channelId;
+              const sessionChannelId =
+                req.payload.channelId ?? chrono.channelId ?? fn.channelId;
               if (!sessionChannelId) {
-                throw new BadRequestException('channelId required to send messages');
+                throw new BadRequestException(
+                  'channelId required to send messages',
+                );
               }
               const channel = await this.channels.findById(sessionChannelId);
               if (!channel) {
-                throw new NotFoundException(`Channel ${sessionChannelId} not found`);
+                throw new NotFoundException(
+                  `Channel ${sessionChannelId} not found`,
+                );
               }
               const session = (
                 (channel.config?.session as string | undefined) ?? 'default'
@@ -151,20 +184,27 @@ export class FunctionExecutor implements TargetExecutor {
                 () => {
                   windowCount += 1;
                   if (windowCount > perSecondLimit) {
-                    throw new BadRequestException('Rate limit exceeded (per second)');
+                    throw new BadRequestException(
+                      'Rate limit exceeded (per second)',
+                    );
                   }
                 },
               );
-              const res = await this.waha.sendTextMessage(session, req.payload.to, req.payload.text);
+              const wahaRes = await this.waha.sendTextMessage(
+                session,
+                req.payload.to,
+                req.payload.text,
+              );
               worker.postMessage({
                 id,
                 type: 'response',
                 ok: true,
-                result: { status: res.status, data: res.data },
-              } as WorkerResponse);
+                result: { status: wahaRes.status, data: wahaRes.data },
+              } satisfies WorkerResponse);
             }
           } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
+            const message =
+              error instanceof Error ? error.message : 'Unknown error';
             worker.postMessage({
               id,
               type: 'response',
@@ -191,13 +231,21 @@ export class FunctionExecutor implements TargetExecutor {
 
       worker.on('error', (err) => {
         clearTimeout(timeout);
-        reject(new InternalServerErrorException(`Function worker error: ${err.message}`));
+        reject(
+          new InternalServerErrorException(
+            `Function worker error: ${err.message}`,
+          ),
+        );
       });
 
       worker.on('exit', (code) => {
         if (code !== 0) {
           clearTimeout(timeout);
-          reject(new InternalServerErrorException(`Function worker exited with code ${code}`));
+          reject(
+            new InternalServerErrorException(
+              `Function worker exited with code ${code}`,
+            ),
+          );
         }
       });
     });
@@ -205,21 +253,29 @@ export class FunctionExecutor implements TargetExecutor {
     try {
       const result = await runPromise;
       if (result.type === 'result' && result.ok) {
-        await this.functionsRepo.save({ ...fn, state: result.data.state ?? {} });
+        await this.functionsRepo.save({
+          ...fn,
+          state: result.data.state ?? {},
+        });
         return {
           status: 'SUCCESS',
           result: { logs: result.data.logs },
           durationMs: Date.now() - startedAt,
         };
       }
-      throw new InternalServerErrorException('Function run did not return result');
+      throw new InternalServerErrorException(
+        'Function run did not return result',
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Function execution error';
+      const message =
+        error instanceof Error ? error.message : 'Function execution error';
       throw new InternalServerErrorException(message);
     }
   }
 
-  private parseLimits(limits: Record<string, unknown> | null | undefined): FnLimits {
+  private parseLimits(
+    limits: Record<string, unknown> | null | undefined,
+  ): FnLimits {
     return {
       timeoutMs:
         typeof limits?.timeoutMs === 'number' && limits.timeoutMs > 0
@@ -251,17 +307,21 @@ export class FunctionExecutor implements TargetExecutor {
   }
 
   private loadHttpAllowlist(): string[] {
-    return this.config
-      .get<string[]>('functionHttpAllowlist')
-      ?.map((h) => h.toLowerCase().trim())
-      .filter(Boolean) ?? [];
+    return (
+      this.config
+        .get<string[]>('functionHttpAllowlist')
+        ?.map((h) => h.toLowerCase().trim())
+        .filter(Boolean) ?? []
+    );
   }
 
   private loadMessageAllowlist(): string[] {
-    return this.config
-      .get<string[]>('functionMessageRecipientAllowlist')
-      ?.map((h) => h.trim())
-      .filter(Boolean) ?? [];
+    return (
+      this.config
+        .get<string[]>('functionMessageRecipientAllowlist')
+        ?.map((h) => h.trim())
+        .filter(Boolean) ?? []
+    );
   }
 
   private assertRecipient(recipient: string, allowlist: string[]) {

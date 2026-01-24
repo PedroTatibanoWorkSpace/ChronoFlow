@@ -16,7 +16,9 @@ export const envConfiguration = () => ({
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
-  functionMessageRecipientAllowlist: (process.env.FUNCTION_MESSAGE_RECIPIENT_ALLOWLIST ?? '')
+  functionMessageRecipientAllowlist: (
+    process.env.FUNCTION_MESSAGE_RECIPIENT_ALLOWLIST ?? ''
+  )
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),

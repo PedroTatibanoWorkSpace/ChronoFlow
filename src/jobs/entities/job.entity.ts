@@ -79,7 +79,12 @@ export class Chrono {
   @Column({ name: 'last_run_at', type: 'timestamptz', nullable: true })
   lastRunAt?: Date | null;
 
-  @Column({ name: 'last_run_status', type: 'varchar', length: 16, nullable: true })
+  @Column({
+    name: 'last_run_status',
+    type: 'varchar',
+    length: 16,
+    nullable: true,
+  })
   lastRunStatus?: LastRunStatus;
 
   @Column({ name: 'next_run_at', type: 'timestamptz', nullable: true })

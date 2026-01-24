@@ -118,11 +118,11 @@ export class SchedulerService implements OnModuleInit {
       if (existing) {
         await existing.remove();
       }
-    } catch (error) {
+    } catch {
       try {
-        await this.queue.clean(0, 'active' as any);
-        await this.queue.clean(0, 'wait' as any);
-        await this.queue.clean(0, 'delayed' as any);
+        await this.queue.clean(0, 0, 'active');
+        await this.queue.clean(0, 0, 'wait');
+        await this.queue.clean(0, 0, 'delayed');
         const again = await this.queue.getJob(jobId);
         if (again) await again.remove();
       } catch (inner) {

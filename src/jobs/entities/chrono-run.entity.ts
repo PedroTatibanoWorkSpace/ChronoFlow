@@ -48,7 +48,7 @@ export class ChronoRun {
   attempt: number;
 
   @Column({ name: 'result', type: 'jsonb', nullable: true })
-  result?: unknown | null;
+  result?: unknown;
 
   @Column({ name: 'duration_ms', type: 'int', nullable: true })
   durationMs?: number | null;
