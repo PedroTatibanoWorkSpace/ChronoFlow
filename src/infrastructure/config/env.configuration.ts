@@ -30,6 +30,8 @@ export const envConfiguration = () => ({
     process.env.SCHEDULER_INTERVAL_MS ?? '30000',
     10,
   ),
+  wahaEnabled:
+    (process.env.WAHA_ENABLED ?? 'true').toLowerCase() === 'true',
   wahaBaseUrl: process.env.WAHA_BASE_URL ?? 'http://waha:3000',
   wahaApiKey: process.env.WAHA_API_KEY ?? '',
 });

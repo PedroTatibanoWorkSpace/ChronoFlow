@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Chrono } from '../entities/job.entity';
 import { ExecutionResult, TargetExecutor } from './target-executor';
 import { WahaService } from '../../waha/services/waha.service';
@@ -12,6 +12,9 @@ export class MessageExecutor implements TargetExecutor {
   ) {}
 
   supports(targetType: Chrono['targetType']): boolean {
+    if (!this.waha.isEnabled) {
+      return false;
+    }
     return targetType === 'MESSAGE';
   }
 

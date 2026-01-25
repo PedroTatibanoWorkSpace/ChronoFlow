@@ -15,9 +15,17 @@ export interface WahaMessageResponse {
 
 @Injectable()
 export class WahaService {
-  private readonly client: AxiosInstance;
+  private readonly _client: AxiosInstance | null;
+  private readonly enabled: boolean;
 
   constructor(private readonly config: ConfigService) {
+    this.enabled = this.config.get<boolean>('wahaEnabled') ?? true;
+
+    if (!this.enabled) {
+      this._client = null;
+      return;
+    }
+
     const baseURL = this.config.get<string>('wahaBaseUrl');
     const apiKey = this.config.get<string>('wahaApiKey');
 
@@ -28,13 +36,24 @@ export class WahaService {
       throw new BadRequestException('WAHA_API_KEY is not configured');
     }
 
-    this.client = axios.create({
+    this._client = axios.create({
       baseURL,
       headers: {
         'X-API-KEY': apiKey,
       },
       timeout: 15000,
     });
+  }
+
+  get isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  private get client(): AxiosInstance {
+    if (!this._client) {
+      throw new BadRequestException('WAHA integration is disabled');
+    }
+    return this._client;
   }
 
   async listSessions(): Promise<WahaSession[]> {
